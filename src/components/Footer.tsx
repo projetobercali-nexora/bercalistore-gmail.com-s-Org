@@ -1,21 +1,40 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Download, Globe, Mail, MapPin, MessageCircle, Phone, Share, X } from 'lucide-react';
+import {
+  CheckCircle2,
+  Download,
+  Globe,
+  Loader2,
+  Mail,
+  MapPin,
+  MessageCircle,
+  Phone,
+  X,
+} from 'lucide-react';
 import { STORE_CONFIG } from '../config/store';
 import { useCatalog } from '../context/CatalogContext';
 import { usePWAInstall } from '../hooks/usePWAInstall';
 import { buildWhatsAppUrl } from '../utils/checkout';
 import { formatKz } from '../utils/format';
+import { formatInstallOutcomeFeedback } from '../utils/pwa';
 import { BrandLogo } from './BrandLogo';
+import { PWAInstallModal } from './PWAInstallModal';
 import { SpeedLinesDivider } from './SpeedLinesDivider';
 
 export const Footer: React.FC = () => {
   const location = useLocation();
   const { storeSettings, whatsappNumber } = useCatalog();
-  const { isInstalled, isInstallableNatively, isIOS, triggerNativeInstall } = usePWAInstall(
-    location.pathname
-  );
+  const {
+    isInstalled,
+    isInstallableNatively,
+    isPrompting,
+    environment,
+    lastOutcome,
+    triggerNativeInstall,
+    clearOutcome,
+  } = usePWAInstall(location.pathname);
   const [showManualInstallModal, setShowManualInstallModal] = useState(false);
+  const outcomeRef = useRef<HTMLDivElement | null>(null);
 
   const brandName = storeSettings.brandName || STORE_CONFIG.brandName;
   const greeting = `Olá, ${brandName}! Gostaria de receber informações sobre os vossos produtos.`;
@@ -30,19 +49,35 @@ export const Footer: React.FC = () => {
     { key: 'website', label: 'Website', url: storeSettings.socialLinks.website },
   ].filter((item): item is { key: string; label: string; url: string } => Boolean(item.url));
 
+  const outcomeFeedback = lastOutcome
+    ? formatInstallOutcomeFeedback(lastOutcome, brandName)
+    : null;
+
+  useEffect(() => {
+    if (outcomeFeedback && outcomeRef.current) {
+      outcomeRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+  }, [outcomeFeedback]);
+
   const handleFooterInstall = async () => {
+    if (isInstalled || isPrompting) {
+      return;
+    }
+
     if (isInstallableNatively) {
-      const res = await triggerNativeInstall();
-      if (res === 'unavailable') {
+      const outcome = await triggerNativeInstall();
+      if (outcome === 'unavailable' || outcome === 'failed') {
         setShowManualInstallModal(true);
       }
       return;
     }
+
+    clearOutcome();
     setShowManualInstallModal(true);
   };
 
   return (
-    <footer className="mt-16 border-t border-white/10 bg-[#0A0A0A] pb-24 md:pb-12">
+    <footer className="mt-16 border-t border-white/10 bg-[#0A0A0A] pb-28 md:pb-12">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 pt-12">
         <div className="grid grid-cols-1 md:grid-cols-12 gap-10 pb-10 border-b border-white/10">
           {/* Identidade da marca, slogan, contactos oficiais e redes sociais reais */}
@@ -179,7 +214,7 @@ export const Footer: React.FC = () => {
           </div>
 
           {/* Entrega, Zonas, Pagamento, WhatsApp e App PWA */}
-          <div className="md:col-span-4 space-y-4">
+          <div className="md:col-span-4 space-y-4 min-w-0">
             <h2 className="font-display text-sm font-bold uppercase tracking-wider text-white">
               Atendimento e Encomendas
             </h2>
@@ -230,21 +265,66 @@ export const Footer: React.FC = () => {
                 rel="noopener noreferrer"
                 className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-lg bg-[#FF8A00] px-4 py-2 font-display text-xs font-bold uppercase text-[#0A0A0A] hover:bg-[#FFC400] transition-colors whitespace-nowrap"
               >
-                <MessageCircle className="h-4 w-4" />
+                <MessageCircle className="h-4 w-4 shrink-0" />
                 <span>Falar no WhatsApp</span>
               </a>
 
-              {!isInstalled && (
+              {isInstalled ? (
+                <span
+                  role="status"
+                  aria-label="Aplicação Bercali Store já instalada"
+                  className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-lg border border-[#22C55E]/40 bg-[#1A1A1A] px-4 py-2 font-display text-xs font-bold uppercase text-[#22C55E] whitespace-nowrap select-none"
+                >
+                  <CheckCircle2 className="h-4 w-4 shrink-0 text-[#22C55E]" aria-hidden="true" />
+                  <span>App Instalada</span>
+                </span>
+              ) : (
                 <button
                   type="button"
+                  disabled={isPrompting}
                   onClick={() => void handleFooterInstall()}
-                  className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-lg border border-white/15 bg-[#1A1A1A] px-4 py-2 font-display text-xs font-bold uppercase text-white hover:border-[#FF8A00] hover:text-[#FF8A00] transition-colors whitespace-nowrap cursor-pointer"
+                  className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-lg border border-white/15 bg-[#1A1A1A] px-4 py-2 font-display text-xs font-bold uppercase text-white hover:border-[#FF8A00] hover:text-[#FF8A00] transition-colors whitespace-nowrap cursor-pointer disabled:opacity-60 disabled:cursor-wait"
                 >
-                  <Download className="h-4 w-4 text-[#FF8A00]" />
-                  <span>Instalar App</span>
+                  {isPrompting ? (
+                    <>
+                      <Loader2 className="h-4 w-4 shrink-0 animate-spin text-[#FF8A00]" />
+                      <span>A aguardar...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Download className="h-4 w-4 shrink-0 text-[#FF8A00]" />
+                      <span>Instalar App</span>
+                    </>
+                  )}
                 </button>
               )}
             </div>
+
+            {/* Resultado real da escolha do utilizador no pedido de instalação do navegador */}
+            {outcomeFeedback && (
+              <div
+                ref={outcomeRef}
+                role="status"
+                aria-live="polite"
+                className={`scroll-mb-24 flex items-start justify-between gap-2 rounded-lg border px-3 py-2 text-xs leading-relaxed ${
+                  outcomeFeedback.tone === 'success'
+                    ? 'border-[#22C55E]/40 bg-[#1A1A1A] text-[#22C55E]'
+                    : outcomeFeedback.tone === 'warning'
+                    ? 'border-[#FFC400]/40 bg-[#1A1A1A] text-[#FFC400]'
+                    : 'border-white/15 bg-[#1A1A1A] text-white/85'
+                }`}
+              >
+                <span>{outcomeFeedback.message}</span>
+                <button
+                  type="button"
+                  onClick={clearOutcome}
+                  aria-label="Ocultar aviso de instalação"
+                  className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded text-[#8A8A8A] hover:text-white cursor-pointer"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            )}
           </div>
         </div>
 
@@ -257,65 +337,13 @@ export const Footer: React.FC = () => {
         </div>
       </div>
 
-      {/* Instruções de instalação manual acionadas pelo utilizador */}
-      {showManualInstallModal && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-label={`Instruções para instalar a aplicação ${brandName}`}
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
-          onClick={() => setShowManualInstallModal(false)}
-        >
-          <div
-            className="w-full max-w-md rounded-xl bg-[#1A1A1A] border border-white/15 p-6 shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between gap-3">
-              <h3 className="font-display text-base font-bold text-white">
-                Instalar {brandName} no dispositivo
-              </h3>
-              <button
-                type="button"
-                onClick={() => setShowManualInstallModal(false)}
-                aria-label="Fechar janela"
-                className="inline-flex h-10 w-10 items-center justify-center rounded-lg text-[#8A8A8A] hover:text-white cursor-pointer"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-
-            {isIOS ? (
-              <ol className="mt-4 list-decimal pl-5 space-y-2 text-sm text-[#8A8A8A]">
-                <li>
-                  No Safari, toca em{' '}
-                  <strong className="text-white inline-flex items-center gap-1">
-                    <Share className="h-3.5 w-3.5 inline text-[#FF8A00]" /> Partilhar
-                  </strong>
-                  .
-                </li>
-                <li>
-                  Escolhe <strong className="text-white">Adicionar ao ecrã principal</strong> e
-                  confirma.
-                </li>
-              </ol>
-            ) : (
-              <p className="mt-4 text-sm text-[#8A8A8A] leading-relaxed">
-                Abre o menu do navegador (três pontos no canto superior) e escolhe{' '}
-                <strong className="text-white">Instalar aplicação</strong> ou{' '}
-                <strong className="text-white">Adicionar ao ecrã principal</strong>.
-              </p>
-            )}
-
-            <button
-              type="button"
-              onClick={() => setShowManualInstallModal(false)}
-              className="mt-5 inline-flex min-h-[44px] w-full items-center justify-center rounded-lg bg-[#FF8A00] px-4 py-2 font-display text-xs font-bold uppercase text-[#0A0A0A] cursor-pointer"
-            >
-              Fechar
-            </button>
-          </div>
-        </div>
-      )}
+      {/* Instruções reais por dispositivo/navegador quando o evento nativo não está disponível */}
+      <PWAInstallModal
+        open={showManualInstallModal}
+        brandName={brandName}
+        environment={environment}
+        onClose={() => setShowManualInstallModal(false)}
+      />
     </footer>
   );
 };

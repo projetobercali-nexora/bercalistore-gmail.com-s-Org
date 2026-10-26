@@ -67,7 +67,7 @@ if (!self.define) {
     });
   };
 }
-define(['./workbox-a454db71'], (function (workbox) { 'use strict';
+define(['./workbox-ad62a015'], (function (workbox) { 'use strict';
 
   self.skipWaiting();
   workbox.clientsClaim();
@@ -78,13 +78,24 @@ define(['./workbox-a454db71'], (function (workbox) { 'use strict';
    */
   workbox.precacheAndRoute([{
     "url": "/index.html",
-    "revision": "0.cg9omki68k"
+    "revision": "0.obkttpqekjg"
   }], {});
   workbox.cleanupOutdatedCaches();
   workbox.registerRoute(new workbox.NavigationRoute(workbox.createHandlerBoundToURL("/index.html"), {
     allowlist: [/^\/$/],
-    denylist: [/^\/api\//, /\.mp4$/, /\.webm$/, /\.pdf$/]
+    denylist: [/^\/api\//, /^\/rest\//, /^\/auth\//, /manifest\.webmanifest$/, /sw\.js$/, /dev-sw\.js$/, /workbox-.*\.js$/, /\.mp4$/, /\.webm$/, /\.pdf$/]
   }));
+  workbox.registerRoute(/^https:\/\/[a-z0-9-]+\.supabase\.(co|in)\/(rest|auth|functions|graphql|realtime)\/.*/i, new workbox.NetworkOnly(), 'GET');
+  workbox.registerRoute(/^https:\/\/[a-z0-9-]+\.supabase\.(co|in)\/storage\/v1\/object\/public\/.*/i, new workbox.NetworkFirst({
+    "cacheName": "bercali-supabase-product-images",
+    "networkTimeoutSeconds": 4,
+    plugins: [new workbox.ExpirationPlugin({
+      maxEntries: 60,
+      maxAgeSeconds: 604800
+    }), new workbox.CacheableResponsePlugin({
+      statuses: [0, 200]
+    })]
+  }), 'GET');
   workbox.registerRoute(/^https:\/\/fonts\.googleapis\.com\/.*/i, new workbox.StaleWhileRevalidate({
     "cacheName": "bercali-google-fonts-stylesheets",
     plugins: [new workbox.ExpirationPlugin({

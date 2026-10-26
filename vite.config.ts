@@ -12,38 +12,85 @@ export default defineConfig(() => {
       VitePWA({
         registerType: 'autoUpdate',
         manifestFilename: 'manifest.webmanifest',
-        includeAssets: [
-          'offline.html',
-          'assets/aistudio/file_00000000d4ac8243a4a41ff6e2cc5b63_b707e5fc.png',
-        ],
         manifest: {
           id: '/',
           name: 'Bercali Store',
           short_name: 'Bercali',
           description: 'O futuro das compras começa aqui. Loja virtual da Bercali Store em Angola.',
           lang: 'pt',
+          dir: 'ltr',
           start_url: '/',
           scope: '/',
           display: 'standalone',
           background_color: '#0A0A0A',
           theme_color: '#0A0A0A',
           orientation: 'portrait-primary',
+          categories: ['shopping', 'lifestyle'],
           icons: [
             {
-              src: '/assets/aistudio/file_00000000d4ac8243a4a41ff6e2cc5b63_b707e5fc.png',
-              sizes: '1254x1254',
+              src: '/pwa-192x192.png',
+              sizes: '192x192',
               type: 'image/png',
               purpose: 'any',
+            },
+            {
+              src: '/pwa-512x512.png',
+              sizes: '512x512',
+              type: 'image/png',
+              purpose: 'any',
+            },
+            {
+              src: '/pwa-maskable-512x512.png',
+              sizes: '512x512',
+              type: 'image/png',
+              purpose: 'maskable',
             },
           ],
         },
         workbox: {
-          globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
-          globIgnores: ['**/Manual_de_Marca_*', '**/Paste_*'],
-          navigateFallback: '/index.html',
-          navigateFallbackDenylist: [/^\/api\//, /\.mp4$/, /\.webm$/, /\.pdf$/],
+          skipWaiting: true,
+          clientsClaim: true,
           cleanupOutdatedCaches: true,
+          maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,
+          globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}'],
+          globIgnores: ['**/Manual_de_Marca_*', '**/Paste_*', 'demo-media/**'],
+          navigateFallback: '/index.html',
+          navigateFallbackDenylist: [
+            /^\/api\//,
+            /^\/rest\//,
+            /^\/auth\//,
+            /manifest\.webmanifest$/,
+            /sw\.js$/,
+            /dev-sw\.js$/,
+            /workbox-.*\.js$/,
+            /\.mp4$/,
+            /\.webm$/,
+            /\.pdf$/,
+          ],
           runtimeCaching: [
+            {
+              // Garante que produtos, categorias, estado da loja, autenticação e encomendas do Supabase
+              // NUNCA são intercetados ou guardados em cache pelo Service Worker.
+              urlPattern: /^https:\/\/[a-z0-9-]+\.supabase\.(co|in)\/(rest|auth|functions|graphql|realtime)\/.*/i,
+              handler: 'NetworkOnly',
+            },
+            {
+              // Imagens públicas de produtos no Supabase Storage: prioriza sempre a rede para refletir
+              // alterações imediatas do Painel Administrativo, com fallback em caso de falha momentânea.
+              urlPattern: /^https:\/\/[a-z0-9-]+\.supabase\.(co|in)\/storage\/v1\/object\/public\/.*/i,
+              handler: 'NetworkFirst',
+              options: {
+                cacheName: 'bercali-supabase-product-images',
+                networkTimeoutSeconds: 4,
+                expiration: {
+                  maxEntries: 60,
+                  maxAgeSeconds: 60 * 60 * 24 * 7,
+                },
+                cacheableResponse: {
+                  statuses: [0, 200],
+                },
+              },
+            },
             {
               urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
               handler: 'StaleWhileRevalidate',
@@ -73,7 +120,6 @@ export default defineConfig(() => {
         },
         devOptions: {
           enabled: true,
-          type: 'module',
         },
       }),
     ],
@@ -91,4 +137,3 @@ export default defineConfig(() => {
     },
   };
 });
-
